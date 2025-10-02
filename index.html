@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>TextShare - Real-time Text Sharing</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -34,59 +34,91 @@
   </script>
   <meta name="description" content="Share text in real-time without servers. Free, open-source, peer-to-peer text sharing.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+  <style>
+    /* Mobile-specific optimizations */
+    @media (max-width: 640px) {
+      /* Prevent zoom on input focus */
+      input, textarea, select {
+        font-size: 16px !important;
+      }
+      
+      /* Ensure proper mobile viewport handling */
+      html, body {
+        height: 100%;
+        overflow: hidden;
+      }
+      
+      /* Handle mobile keyboard overlay */
+      .mobile-editor {
+        height: 100vh;
+        height: 100dvh; /* Dynamic viewport height for mobile */
+      }
+    }
+    
+    /* Smooth transitions for better UX */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Better text selection on mobile */
+    textarea {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+  </style>
 </head>
 <body class="antialiased">
   
   <!-- Landing Page -->
-  <div id="landing" class="h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-hidden flex items-center justify-center">
+  <div id="landing" class="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 relative overflow-hidden">
     <!-- Subtle background pattern -->
     <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23e0e7ff" fill-opacity="0.3"%3E%3Ccircle cx="7" cy="7" r="1"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-40"></div>
     
-    <div class="relative container mx-auto px-6 py-8">
+    <div class="relative container mx-auto px-4 sm:px-6 py-8 sm:py-16 lg:py-24">
       <div class="max-w-4xl mx-auto text-center">
         <!-- Main heading with animation -->
-        <div class="animate-fade-in">
-          <h1 class="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight">
+        <div class="animate-fade-in mb-8 sm:mb-12">
+          <h1 class="text-3xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight px-2">
             Share Text
             <span class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
               Instantly
             </span>
           </h1>
-          <p class="text-lg sm:text-xl lg:text-2xl text-gray-600 mb-8 sm:mb-12 max-w-2xl mx-auto leading-relaxed">
+          <p class="text-base sm:text-xl lg:text-2xl text-gray-600 mb-8 sm:mb-10 max-w-2xl mx-auto leading-relaxed px-4">
             No signup. No servers. Just peer-to-peer real-time collaboration.
           </p>
         </div>
         
         <!-- CTA Button with enhanced styling -->
         <div class="animate-slide-up mb-12 sm:mb-16">
-          <button id="create-btn" class="group relative px-8 sm:px-10 py-4 sm:py-5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-lg sm:text-xl font-semibold rounded-2xl hover:from-indigo-700 hover:to-indigo-800 transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 shadow-xl hover:shadow-2xl">
+          <button id="create-btn" class="group relative px-8 sm:px-10 py-4 sm:py-5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-base sm:text-lg lg:text-xl font-semibold rounded-2xl hover:from-indigo-700 hover:to-indigo-800 transform hover:scale-105 hover:-translate-y-1 transition-all duration-300 shadow-xl hover:shadow-2xl">
             <span class="relative z-10">Create New Document</span>
             <div class="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
           </button>
         </div>
         
         <!-- Feature cards with staggered animation -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 sm:mb-12">
-          <div class="animate-slide-up bg-white/70 backdrop-blur-sm p-4 sm:p-6 lg:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:-translate-y-2">
-            <div class="text-2xl sm:text-3xl lg:text-4xl mb-2 sm:mb-4">🔒</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 sm:mb-16 px-2">
+          <div class="animate-slide-up bg-white/80 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:-translate-y-2 lg:col-span-1 sm:col-span-2 lg:col-span-1">
+            <div class="text-3xl sm:text-4xl mb-3 sm:mb-4">🔒</div>
             <h3 class="font-bold text-lg sm:text-xl mb-2 sm:mb-3 text-gray-900">Private</h3>
             <p class="text-sm sm:text-base text-gray-600 leading-relaxed">Peer-to-peer connections. Your data never touches a server.</p>
           </div>
-          <div class="animate-slide-up bg-white/70 backdrop-blur-sm p-4 sm:p-6 lg:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:-translate-y-2" style="animation-delay: 0.1s">
-            <div class="text-2xl sm:text-3xl lg:text-4xl mb-2 sm:mb-4">⚡</div>
+          <div class="animate-slide-up bg-white/80 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:-translate-y-2" style="animation-delay: 0.1s">
+            <div class="text-3xl sm:text-4xl mb-3 sm:mb-4">⚡</div>
             <h3 class="font-bold text-lg sm:text-xl mb-2 sm:mb-3 text-gray-900">Real-time</h3>
             <p class="text-sm sm:text-base text-gray-600 leading-relaxed">See changes instantly as others type.</p>
           </div>
-          <div class="animate-slide-up bg-white/70 backdrop-blur-sm p-4 sm:p-6 lg:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:-translate-y-2" style="animation-delay: 0.2s">
-            <div class="text-2xl sm:text-3xl lg:text-4xl mb-2 sm:mb-4">🌐</div>
+          <div class="animate-slide-up bg-white/80 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/20 hover:-translate-y-2 sm:col-span-2 lg:col-span-1" style="animation-delay: 0.2s">
+            <div class="text-3xl sm:text-4xl mb-3 sm:mb-4">🌐</div>
             <h3 class="font-bold text-lg sm:text-xl mb-2 sm:mb-3 text-gray-900">Open Source</h3>
             <p class="text-sm sm:text-base text-gray-600 leading-relaxed">Free forever. View code on GitHub.</p>
           </div>
         </div>
         
         <!-- Footer with subtle styling -->
-        <div class="animate-fade-in">
-          <p class="text-gray-500 text-sm sm:text-base">
+        <div class="animate-fade-in pb-8">
+          <p class="text-gray-500 text-sm sm:text-base px-4">
             Built with ❤️ using WebRTC and Yjs • 
             <a href="https://github.com/oterapoko/textshare" class="text-indigo-600 hover:text-indigo-700 underline decoration-2 underline-offset-4 transition-colors">View Source</a>
           </p>
@@ -98,71 +130,73 @@
   <!-- Editor Page -->
   <div id="editor-container" class="hidden animate-fade-in">
     <!-- Top Bar -->
-    <div class="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-b border-gray-200/50 px-4 sm:px-6 py-4 flex justify-between items-center z-20 shadow-sm">
-      <a href="#" class="group flex items-center gap-3 font-bold text-xl text-gray-800 hover:text-indigo-600 transition-colors">
-        <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm font-bold group-hover:scale-110 transition-transform">
+    <div class="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-b border-gray-200/50 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center z-20 shadow-sm">
+      <a href="#" class="group flex items-center gap-2 sm:gap-3 font-bold text-lg sm:text-xl text-gray-800 hover:text-indigo-600 transition-colors">
+        <div class="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm font-bold group-hover:scale-110 transition-transform">
           T
         </div>
         <span class="hidden sm:block">TextShare</span>
       </a>
       
-      <div class="flex items-center gap-3 sm:gap-6">
-        <!-- Desktop connection status (hidden on mobile) -->
-        <div class="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-100/80 rounded-full text-sm text-gray-600">
+      <div class="flex items-center gap-2 sm:gap-4">
+        <!-- Desktop connection status -->
+        <div class="hidden lg:flex items-center gap-2 px-3 py-2 bg-gray-100/80 rounded-full text-sm text-gray-600">
           <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-soft" id="status-indicator"></div>
           <span id="connection-text">Connecting...</span>
         </div>
         
-        <!-- Desktop peer count -->
-        <div class="hidden sm:flex items-center gap-2 text-sm text-gray-600">
-          <span id="peer-count">0</span> 
-          <span class="text-gray-400">connected</span>
-        </div>
-        
-        <!-- Mobile peer count (only number, no status) -->
-        <div class="sm:hidden flex items-center gap-2 text-sm text-gray-600">
-          <span id="peer-count-mobile">0</span>
+        <!-- Peer count with proper labels -->
+        <div class="flex items-center gap-2 px-3 py-2 bg-gray-100/80 rounded-full text-sm text-gray-600">
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+          </svg>
+          <span id="peer-count">0</span>
+          <span class="hidden sm:inline text-gray-400">online</span>
         </div>
         
         <!-- Copy button -->
-        <button id="copy-btn" class="group relative px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 text-sm font-medium shadow-lg hover:shadow-xl hover:scale-105">
-          <span class="flex items-center gap-2">
+        <button id="copy-btn" class="group relative px-3 sm:px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-800 transition-all duration-200 text-sm font-medium shadow-lg hover:shadow-xl hover:scale-105">
+          <span class="flex items-center gap-1 sm:gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
             </svg>
-            <span class="hidden sm:inline">Copy Link</span>
+            <span class="hidden sm:inline">Share</span>
           </span>
         </button>
       </div>
     </div>
     
-    <!-- Editor -->
-    <div class="pt-20 pb-16 min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      <textarea 
-        id="editor" 
-        class="w-full h-full min-h-[calc(100vh-9rem)] px-6 sm:px-12 lg:px-24 py-8 text-base sm:text-lg text-gray-800 leading-relaxed focus:outline-none resize-none bg-transparent placeholder-gray-400 selection:bg-indigo-100"
-        placeholder="Start typing... Your changes sync in real-time with anyone who has this link."
-        spellcheck="true"
-      ></textarea>
-    </div>
-    
-    <!-- Status Bar -->
-    <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-200/50 px-4 sm:px-6 py-3 text-sm text-gray-500 flex justify-between items-center shadow-lg">
-      <div class="flex items-center gap-4">
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-          </svg>
-          <span id="char-count">0</span> characters
-        </span>
-        <span class="hidden sm:inline text-gray-400">•</span>
-        <span class="hidden sm:inline text-gray-400">Auto-saved</span>
+    <!-- Editor Container with proper mobile handling -->
+    <div class="flex flex-col h-screen mobile-editor pt-16 sm:pt-20">
+      <!-- Main Editor Area -->
+      <div class="flex-1 relative bg-gradient-to-br from-gray-50 to-white">
+        <textarea 
+          id="editor" 
+          class="w-full h-full px-4 sm:px-8 lg:px-16 py-4 sm:py-8 text-base sm:text-lg text-gray-800 leading-relaxed focus:outline-none resize-none bg-transparent placeholder-gray-400 selection:bg-indigo-100 block"
+          placeholder="Start typing... Your changes sync in real-time with anyone who has this link."
+          spellcheck="true"
+        ></textarea>
       </div>
       
-      <div id="connection-status" class="flex items-center gap-2">
-        <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-soft" id="status-indicator-bottom"></div>
-        <!-- Mobile: show status text, Desktop: only color indicator -->
-        <span class="sm:hidden" id="status-text-mobile">Connecting...</span>
+      <!-- Status Bar - Always visible -->
+      <div class="flex-shrink-0 bg-white/95 backdrop-blur-xl border-t border-gray-200/50 px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm text-gray-500 flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <span class="flex items-center gap-1 sm:gap-2">
+            <svg class="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <span id="char-count">0</span>
+            <span class="hidden sm:inline">characters</span>
+          </span>
+          <span class="hidden sm:inline text-gray-300">•</span>
+          <span class="hidden sm:inline text-gray-400">Auto-saved</span>
+        </div>
+        
+        <!-- Connection status for mobile -->
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse-soft" id="status-indicator-bottom"></div>
+          <span id="status-text-mobile">Connecting...</span>
+        </div>
       </div>
     </div>
   </div>

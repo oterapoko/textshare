@@ -70,9 +70,8 @@ function updateConnectionStatus(status, peerCount = 0) {
   const desktopStatusText = document.getElementById('connection-text');      // Desktop top bar
   const mobileStatusText = document.getElementById('status-text-mobile');    // Mobile bottom bar
   
-  // Update peer counts
-  const desktopPeerCount = document.getElementById('peer-count');           // Desktop top bar
-  const mobilePeerCount = document.getElementById('peer-count-mobile');     // Mobile top bar
+  // Update peer count (unified element)
+  const peerCountElement = document.getElementById('peer-count');
   
   let statusText = '';
   let indicatorClass = '';
@@ -112,12 +111,9 @@ function updateConnectionStatus(status, peerCount = 0) {
     mobileStatusText.textContent = statusText;
   }
   
-  // Update peer counts
-  if (desktopPeerCount) {
-    desktopPeerCount.textContent = peerCount.toString();
-  }
-  if (mobilePeerCount) {
-    mobilePeerCount.textContent = peerCount.toString();
+  // Update peer count
+  if (peerCountElement) {
+    peerCountElement.textContent = peerCount.toString();
   }
 }
 
