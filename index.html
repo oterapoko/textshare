@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TextShare - Real-time Text Sharing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="description" content="Share text in real-time without servers. Free, open-source, peer-to-peer text sharing.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+</head>
+<body class="antialiased">
+  
+  <!-- Landing Page -->
+  <div id="landing" class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div class="container mx-auto px-4 py-16">
+      <div class="max-w-2xl mx-auto text-center">
+        <h1 class="text-4xl sm:text-5xl font-bold text-gray-900 mb-6">
+          Share Text Instantly
+        </h1>
+        <p class="text-lg sm:text-xl text-gray-600 mb-8">
+          No signup. No servers. Just peer-to-peer real-time collaboration.
+        </p>
+        <button id="create-btn" class="px-8 py-4 bg-indigo-600 text-white text-lg font-semibold rounded-xl hover:bg-indigo-700 transform hover:scale-105 transition-all shadow-lg">
+          Create New Document
+        </button>
+        
+        <div class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+          <div class="bg-white p-6 rounded-lg shadow">
+            <h3 class="font-bold text-lg mb-2">🔒 Private</h3>
+            <p class="text-gray-600">Peer-to-peer connections. Your data never touches a server.</p>
+          </div>
+          <div class="bg-white p-6 rounded-lg shadow">
+            <h3 class="font-bold text-lg mb-2">⚡ Real-time</h3>
+            <p class="text-gray-600">See changes instantly as others type.</p>
+          </div>
+          <div class="bg-white p-6 rounded-lg shadow">
+            <h3 class="font-bold text-lg mb-2">🌐 Open Source</h3>
+            <p class="text-gray-600">Free forever. View code on GitHub.</p>
+          </div>
+        </div>
+        
+        <div class="mt-16 text-center">
+          <p class="text-gray-500 text-sm">
+            Built with ❤️ using WebRTC and Yjs • 
+            <a href="https://github.com" class="text-indigo-600 hover:text-indigo-700 underline">View Source</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Editor Page -->
+  <div id="editor-container" class="hidden">
+    <!-- Top Bar -->
+    <div class="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 sm:px-6 py-3 flex justify-between items-center z-10">
+      <a href="#" class="font-bold text-xl text-gray-800 hover:text-indigo-600 transition">
+        TextShare
+      </a>
+      <div class="flex items-center gap-4">
+        <div class="text-sm text-gray-600">
+          <span id="peer-count">0</span> connected
+        </div>
+        <button id="copy-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">
+          Copy Link
+        </button>
+      </div>
+    </div>
+    
+    <!-- Editor -->
+    <textarea 
+      id="editor" 
+      class="w-full h-screen pt-20 pb-8 px-4 sm:px-8 text-base sm:text-lg text-gray-800 leading-relaxed focus:outline-none resize-none bg-gray-50"
+      placeholder="Start typing... Changes sync in real-time."
+      spellcheck="true"
+    ></textarea>
+    
+    <!-- Status Bar -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-gray-200 px-4 sm:px-6 py-2 text-xs text-gray-500 flex justify-between items-center">
+      <div>
+        <span id="char-count">0</span> characters
+      </div>
+      <div id="connection-status" class="flex items-center gap-2">
+        <div class="w-2 h-2 bg-gray-400 rounded-full" id="status-indicator"></div>
+        <span>Connecting...</span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Scripts -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
