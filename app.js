@@ -60,18 +60,10 @@ function updateCharCount() {
 
 // Update connection status
 function updateConnectionStatus(status, peerCount = 0) {
-  // Update status indicators
-  const indicators = [
-    document.getElementById('status-indicator'),        // Desktop top bar
-    document.getElementById('status-indicator-bottom')  // Bottom status bar
-  ];
+  const statusElement = document.getElementById('connection-status');
+  const indicator = document.getElementById('status-indicator');
   
-  // Update status texts
-  const desktopStatusText = document.getElementById('connection-text');      // Desktop top bar
-  const mobileStatusText = document.getElementById('status-text-mobile');    // Mobile bottom bar
-  
-  // Update peer count (unified element)
-  const peerCountElement = document.getElementById('peer-count');
+  if (!statusElement || !indicator) return;
   
   let statusText = '';
   let indicatorClass = '';
@@ -79,42 +71,23 @@ function updateConnectionStatus(status, peerCount = 0) {
   switch (status) {
     case 'connecting':
       statusText = 'Connecting...';
-      indicatorClass = 'bg-yellow-400 animate-pulse-soft';
+      indicatorClass = 'bg-yellow-400';
       break;
     case 'connected':
-      statusText = peerCount > 0 ? 'Syncing' : 'Ready';
+      statusText = peerCount > 0 ? `Connected (${peerCount} peers)` : 'Connected';
       indicatorClass = 'bg-green-500';
       break;
     case 'disconnected':
-      statusText = 'Local only';
-      indicatorClass = 'bg-orange-500';
+      statusText = 'Offline';
+      indicatorClass = 'bg-red-500';
       break;
     default:
       statusText = 'Unknown';
-      indicatorClass = 'bg-gray-400 animate-pulse-soft';
+      indicatorClass = 'bg-gray-400';
   }
   
-  // Update all indicators with the same color
-  indicators.forEach(indicator => {
-    if (indicator) {
-      indicator.className = `w-2 h-2 rounded-full ${indicatorClass}`;
-    }
-  });
-  
-  // Update desktop status text (top bar)
-  if (desktopStatusText) {
-    desktopStatusText.textContent = statusText;
-  }
-  
-  // Update mobile status text (bottom bar)
-  if (mobileStatusText) {
-    mobileStatusText.textContent = statusText;
-  }
-  
-  // Update peer count
-  if (peerCountElement) {
-    peerCountElement.textContent = peerCount.toString();
-  }
+  statusElement.querySelector('span').textContent = statusText;
+  indicator.className = `w-2 h-2 rounded-full ${indicatorClass}`;
 }
 
 // Initialize Yjs for a room
@@ -480,7 +453,7 @@ async function initializeYjs(roomId) {
   }, 100);
 }
 
-// Router function with smooth transitions
+// Router function
 async function handleRoute() {
   const hash = window.location.hash;
   
@@ -494,34 +467,15 @@ async function handleRoute() {
       return;
     }
     
-    // Smooth transition to editor
-    const landing = document.getElementById('landing');
-    const editor = document.getElementById('editor-container');
-    
-    // Fade out landing page
-    landing.style.opacity = '0';
-    landing.style.transform = 'translateY(-20px)';
-    
-    setTimeout(() => {
-      landing.classList.add('hidden');
-      editor.classList.remove('hidden');
-      
-      // Fade in editor
-      editor.style.opacity = '0';
-      editor.style.transform = 'translateY(20px)';
-      
-      requestAnimationFrame(() => {
-        editor.style.transition = 'all 0.4s ease-out';
-        editor.style.opacity = '1';
-        editor.style.transform = 'translateY(0)';
-      });
-    }, 200);
+    document.getElementById('landing').classList.add('hidden');
+    document.getElementById('editor-container').classList.remove('hidden');
     
     // Initialize Yjs with proper async handling
     try {
       await initializeYjs(roomId);
     } catch (error) {
       console.error('Failed to initialize Yjs:', error);
+      // Show error to user
       showToast('Failed to initialize room. Please try again.', 'error');
     }
   } else {
@@ -532,25 +486,8 @@ async function handleRoute() {
       currentProvider = null;
     }
     
-    // Smooth transition back to landing
-    const landing = document.getElementById('landing');
-    const editor = document.getElementById('editor-container');
-    
-    if (!editor.classList.contains('hidden')) {
-      // Fade out editor
-      editor.style.opacity = '0';
-      editor.style.transform = 'translateY(20px)';
-      
-      setTimeout(() => {
-        editor.classList.add('hidden');
-        landing.classList.remove('hidden');
-        
-        // Reset and fade in landing
-        landing.style.transition = 'all 0.4s ease-out';
-        landing.style.opacity = '1';
-        landing.style.transform = 'translateY(0)';
-      }, 200);
-    }
+    document.getElementById('landing').classList.remove('hidden');
+    document.getElementById('editor-container').classList.add('hidden');
   }
 }
 
