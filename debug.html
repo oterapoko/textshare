@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TextShare - Debug Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+  <div class="max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-4">TextShare Debug Console</h1>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div class="bg-white p-4 rounded-lg shadow">
+        <h2 class="font-semibold mb-2">Quick Actions</h2>
+        <div class="space-y-2">
+          <button id="test-room" class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Open Test Room
+          </button>
+          <button id="clear-storage" class="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            Clear IndexedDB
+          </button>
+          <button id="test-connection" class="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+            Test WebRTC
+          </button>
+        </div>
+      </div>
+      
+      <div class="bg-white p-4 rounded-lg shadow">
+        <h2 class="font-semibold mb-2">Connection Status</h2>
+        <div id="status-info" class="text-sm space-y-1">
+          <div>WebRTC: <span id="webrtc-status" class="font-mono">Unknown</span></div>
+          <div>IndexedDB: <span id="indexeddb-status" class="font-mono">Unknown</span></div>
+          <div>Peers: <span id="peer-status" class="font-mono">0</span></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="bg-white p-4 rounded-lg shadow mb-4">
+      <h2 class="font-semibold mb-2">Console Log</h2>
+      <div id="console-log" class="bg-gray-900 text-green-400 p-3 rounded font-mono text-sm h-64 overflow-y-auto">
+        <!-- Console output will appear here -->
+      </div>
+    </div>
+    
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="font-semibold mb-2">Instructions</h2>
+      <ol class="list-decimal list-inside space-y-1 text-sm">
+        <li>Click "Open Test Room" to create a test room</li>
+        <li>Open the same URL in another tab to test sync</li>
+        <li>Type in both tabs to see real-time sync</li>
+        <li>Check the console log for debugging info</li>
+        <li>Use "Clear IndexedDB" if you need to reset storage</li>
+      </ol>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as Y from 'https://cdn.jsdelivr.net/npm/yjs@latest/+esm';
+    import { WebrtcProvider } from 'https://cdn.jsdelivr.net/npm/y-webrtc@latest/+esm';
+    import { IndexeddbPersistence } from 'https://cdn.jsdelivr.net/npm/y-indexeddb@latest/+esm';
+    
+    const consoleLog = document.getElementById('console-log');
+    const webrtcStatus = document.getElementById('webrtc-status');
+    const indexeddbStatus = document.getElementById('indexeddb-status');
+    const peerStatus = document.getElementById('peer-status');
+    
+    // Override console.log to show in our debug console
+    const originalLog = console.log;
+    console.log = function(...args) {
+      originalLog.apply(console, args);
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      
+      const div = document.createElement('div');
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      consoleLog.appendChild(div);
+      consoleLog.scrollTop = consoleLog.scrollHeight;
+    };
+    
+    // Test room functionality
+    document.getElementById('test-room').addEventListener('click', () => {
+      const testRoomId = 'debug-test-room';
+      const url = `${window.location.origin}${window.location.pathname.replace('debug.html', '')}#room-${testRoomId}`;
+      console.log('Opening test room:', url);
+      window.open(url, '_blank');
+    });
+    
+    // Clear storage
+    document.getElementById('clear-storage').addEventListener('click', async () => {
+      try {
+        // Clear IndexedDB
+        const databases = await indexedDB.databases();
+        for (const db of databases) {
+          if (db.name && db.name.startsWith('textshare-')) {
+            console.log('Deleting database:', db.name);
+            indexedDB.deleteDatabase(db.name);
+          }
+        }
+        console.log('IndexedDB cleared');
+        indexeddbStatus.textContent = 'Cleared';
+      } catch (error) {
+        console.error('Error clearing IndexedDB:', error);
+      }
+    });
+    
+    // Test WebRTC connection
+    document.getElementById('test-connection').addEventListener('click', async () => {
+      console.log('Testing WebRTC connection...');
+      
+      try {
+        const ydoc = new Y.Doc();
+        const ytext = ydoc.getText('test-text');
+        
+        // Test IndexedDB
+        const indexeddbProvider = new IndexeddbPersistence('debug-test', ydoc);
+        indexeddbProvider.on('synced', () => {
+          console.log('IndexedDB test: SUCCESS');
+          indexeddbStatus.textContent = 'Working';
+        });
+        
+        // Test WebRTC
+        const webrtcProvider = new WebrtcProvider('debug-test-room', ydoc, {
+          signaling: [
+            'wss://signaling.yjs.dev',
+            'wss://y-webrtc-signaling-eu.herokuapp.com'
+          ],
+          maxConns: 5
+        });
+        
+        webrtcProvider.on('status', (event) => {
+          console.log('WebRTC status:', event.status);
+          webrtcStatus.textContent = event.status;
+        });
+        
+        webrtcProvider.awareness.on('change', () => {
+          const states = webrtcProvider.awareness.getStates();
+          const peerCount = Math.max(0, states.size - 1);
+          console.log('Peer count:', peerCount);
+          peerStatus.textContent = peerCount.toString();
+        });
+        
+        // Clean up after 10 seconds
+        setTimeout(() => {
+          webrtcProvider.destroy();
+          console.log('Test connection cleaned up');
+        }, 10000);
+        
+      } catch (error) {
+        console.error('Connection test failed:', error);
+        webrtcStatus.textContent = 'Failed';
+      }
+    });
+    
+    // Initial status check
+    console.log('Debug console initialized');
+    console.log('WebRTC support:', !!window.RTCPeerConnection);
+    console.log('IndexedDB support:', !!window.indexedDB);
+    
+    webrtcStatus.textContent = window.RTCPeerConnection ? 'Supported' : 'Not supported';
+    indexeddbStatus.textContent = window.indexedDB ? 'Supported' : 'Not supported';
+  </script>
+</body>
+</html>

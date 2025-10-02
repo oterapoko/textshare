@@ -90,6 +90,8 @@ function updateConnectionStatus(status, peerCount = 0) {
 
 // Initialize Yjs for a room
 function initializeYjs(roomId) {
+  console.log('Initializing Yjs for room:', roomId);
+  
   // Clean up previous connections
   if (currentProvider) {
     currentProvider.destroy();
@@ -102,31 +104,6 @@ function initializeYjs(roomId) {
   currentDoc = ydoc;
   currentYText = ytext;
   
-  // IndexedDB persistence
-  const indexeddbProvider = new IndexeddbPersistence(`textshare-${roomId}`, ydoc);
-  
-  indexeddbProvider.on('synced', () => {
-    console.log('Content loaded from IndexedDB');
-    const textarea = document.getElementById('editor');
-    if (textarea && ytext.toString()) {
-      textarea.value = ytext.toString();
-      updateCharCount();
-    }
-  });
-  
-  // WebRTC provider for P2P sync
-  const webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
-    signaling: [
-      'wss://signaling.yjs.dev',
-      'wss://y-webrtc-signaling-eu.herokuapp.com',
-      'wss://y-webrtc-signaling-us.herokuapp.com'
-    ],
-    maxConns: 20 + Math.floor(Math.random() * 15),
-    filterBcConns: true
-  });
-  
-  currentProvider = webrtcProvider;
-  
   const textarea = document.getElementById('editor');
   
   if (!textarea) {
@@ -134,82 +111,141 @@ function initializeYjs(roomId) {
     return;
   }
   
-  // Sync Yjs to textarea
-  ytext.observe(() => {
+  // Initialize peer count display
+  const peerCountElement = document.getElementById('peer-count');
+  if (peerCountElement) {
+    peerCountElement.textContent = '0';
+  }
+  
+  // IndexedDB persistence - with better error handling
+  const indexeddbProvider = new IndexeddbPersistence(`textshare-${roomId}`, ydoc);
+  
+  indexeddbProvider.on('synced', () => {
+    console.log('Content loaded from IndexedDB');
+    const savedText = ytext.toString();
+    if (savedText && textarea.value !== savedText) {
+      textarea.value = savedText;
+      updateCharCount();
+      console.log('Restored text from IndexedDB:', savedText.length, 'characters');
+    }
+  });
+  
+  // WebRTC provider for P2P sync - with better configuration
+  const webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
+    signaling: [
+      'wss://signaling.yjs.dev',
+      'wss://y-webrtc-signaling-eu.herokuapp.com',
+      'wss://y-webrtc-signaling-us.herokuapp.com'
+    ],
+    maxConns: 20,
+    filterBcConns: true
+  });
+  
+  currentProvider = webrtcProvider;
+  
+  // Better peer count tracking
+  let peerCount = 0;
+  
+  // Update peer count with proper calculation
+  const updatePeerCount = () => {
+    const states = webrtcProvider.awareness.getStates();
+    peerCount = Math.max(0, states.size - 1); // Ensure never negative
+    
+    if (peerCountElement) {
+      peerCountElement.textContent = peerCount.toString();
+    }
+    
+    console.log('Peer count updated:', peerCount, 'total states:', states.size);
+    updateConnectionStatus(peerCount > 0 ? 'connected' : 'connecting', peerCount);
+  };
+  
+  // Sync Yjs to textarea with better handling
+  ytext.observe((event) => {
     const ytextValue = ytext.toString();
     if (textarea.value !== ytextValue) {
       const cursorPos = textarea.selectionStart;
       const scrollPos = textarea.scrollTop;
       textarea.value = ytextValue;
-      textarea.setSelectionRange(cursorPos, cursorPos);
+      
+      // Restore cursor position if possible
+      if (cursorPos <= ytextValue.length) {
+        textarea.setSelectionRange(cursorPos, cursorPos);
+      }
       textarea.scrollTop = scrollPos;
       updateCharCount();
+      
+      console.log('Text updated from Yjs:', ytextValue.length, 'characters');
     }
   });
   
-  // Sync textarea to Yjs
+  // Sync textarea to Yjs with debouncing
   let isLocalChange = false;
+  let inputTimeout = null;
+  
   textarea.addEventListener('input', () => {
     if (isLocalChange) return;
     
-    const currentText = ytext.toString();
-    const newText = textarea.value;
-    
-    if (currentText !== newText) {
-      isLocalChange = true;
-      ydoc.transact(() => {
-        ytext.delete(0, currentText.length);
-        ytext.insert(0, newText);
-      });
-      isLocalChange = false;
-      updateCharCount();
+    // Clear previous timeout
+    if (inputTimeout) {
+      clearTimeout(inputTimeout);
     }
+    
+    // Debounce input to avoid too many updates
+    inputTimeout = setTimeout(() => {
+      const currentText = ytext.toString();
+      const newText = textarea.value;
+      
+      if (currentText !== newText) {
+        isLocalChange = true;
+        ydoc.transact(() => {
+          ytext.delete(0, currentText.length);
+          ytext.insert(0, newText);
+        });
+        isLocalChange = false;
+        updateCharCount();
+        console.log('Text updated to Yjs:', newText.length, 'characters');
+      }
+    }, 100); // 100ms debounce
   });
   
-  // Update peer count
-  webrtcProvider.awareness.on('change', () => {
-    const states = webrtcProvider.awareness.getStates();
-    const peerCount = states.size - 1; // Subtract self
-    document.getElementById('peer-count').textContent = peerCount;
-    updateConnectionStatus('connected', peerCount);
-  });
-  
-  // Connection status events
+  // WebRTC connection events
   webrtcProvider.on('status', event => {
     console.log('WebRTC status:', event.status);
-    if (event.status === 'connected') {
-      updateConnectionStatus('connected');
-    } else if (event.status === 'connecting') {
-      updateConnectionStatus('connecting');
-    } else {
-      updateConnectionStatus('disconnected');
-    }
+    updateConnectionStatus(event.status === 'connected' ? 'connected' : 'connecting', peerCount);
   });
   
-  // Handle connection events
-  webrtcProvider.on('peers', event => {
-    console.log('Peers changed:', event);
-    const peerCount = Object.keys(event.added).length + Object.keys(event.removed).length;
-    updateConnectionStatus('connected', peerCount);
+  // Awareness events for peer tracking
+  webrtcProvider.awareness.on('change', (changes) => {
+    console.log('Awareness changed:', changes);
+    updatePeerCount();
   });
   
-  // Initial connection status
-  updateConnectionStatus('connecting');
+  // WebRTC peer events
+  webrtcProvider.on('peers', (event) => {
+    console.log('Peers event:', event);
+    updatePeerCount();
+  });
   
-  // Focus textarea and update char count
+  // Connection established
+  webrtcProvider.on('synced', () => {
+    console.log('WebRTC synced');
+    updatePeerCount();
+  });
+  
+  // Initial setup
+  updateConnectionStatus('connecting', 0);
+  
+  // Focus textarea and update char count after a delay
   setTimeout(() => {
     textarea.focus();
     updateCharCount();
-  }, 100);
+    updatePeerCount();
+  }, 200);
   
-  // Auto-save indicator (optional enhancement)
-  let saveTimeout;
-  textarea.addEventListener('input', () => {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      // Could show a "saved" indicator here
-      console.log('Auto-saved to IndexedDB');
-    }, 1000);
+  // Set user awareness info
+  webrtcProvider.awareness.setLocalStateField('user', {
+    name: 'User-' + Math.random().toString(36).substr(2, 5),
+    color: '#' + Math.floor(Math.random()*16777215).toString(16)
   });
 }
 
