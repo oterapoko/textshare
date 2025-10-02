@@ -2,15 +2,18 @@
 
 > Share text instantly. No signup. No servers. Just peer-to-peer real-time collaboration.
 
+🚀 **[Live Demo](https://oterapoko.github.io/textshare/)** | 📖 **[Documentation](#-quick-start)** | 🐛 **[Issues](https://github.com/oterapoko/textshare/issues)**
+
 ## 🌟 Features
 
 - **🔒 Private**: Peer-to-peer connections. Your data never touches a server
 - **⚡ Real-time**: See changes instantly as others type
 - **🌐 Open Source**: Free forever and fully open source
 - **📱 Mobile Friendly**: Works perfectly on all devices
-- **💾 Auto-save**: Local persistence with IndexedDB
+- **💾 Auto-save**: Local persistence with localStorage + IndexedDB fallback
 - **🔗 Simple Sharing**: Just copy and share the URL
 - **🚀 Zero Setup**: No accounts, no downloads, no configuration
+- **🛡️ Robust**: Multiple fallback layers ensure reliability across all browsers
 
 ## 🚀 Quick Start
 
@@ -25,7 +28,8 @@
 - **Styling**: Tailwind CSS (via CDN)
 - **Real-time Sync**: [Yjs](https://github.com/yjs/yjs) - Conflict-free Replicated Data Types
 - **P2P Communication**: [y-webrtc](https://github.com/yjs/y-webrtc) - WebRTC provider for Yjs
-- **Local Storage**: [y-indexeddb](https://github.com/yjs/y-indexeddb) - IndexedDB persistence
+- **Local Storage**: localStorage (primary) + [y-indexeddb](https://github.com/yjs/y-indexeddb) (fallback)
+- **Multi-tab Sync**: BroadcastChannel API for same-device synchronization
 - **Hosting**: GitHub Pages (free, HTTPS, global CDN)
 
 ## 📁 Project Structure
@@ -85,7 +89,7 @@ Both users edit → Yjs CRDTs sync changes → Real-time updates appear
 
 ## 🚀 Deployment
 
-### GitHub Pages (Recommended)
+### Option 1: GitHub Pages (Recommended)
 
 1. **Fork this repository**
 2. **Enable GitHub Pages**:
@@ -94,7 +98,7 @@ Both users edit → Yjs CRDTs sync changes → Real-time updates appear
    - Branch: main / root
 3. **Access your site**: `https://yourusername.github.io/textshare/`
 
-### Local Development
+### Option 2: Local Development
 
 ```bash
 # Clone the repository
@@ -166,26 +170,34 @@ open test/index.html
 
 ## 🔍 Troubleshooting
 
-### Connection Issues
+### Common Issues
 
-1. **Check browser compatibility**: Ensure WebRTC support
-2. **Firewall/Network**: Some corporate networks block WebRTC
-3. **Try different browsers**: Test in Chrome/Firefox
-4. **Clear browser data**: Reset IndexedDB if corrupted
+#### "Yjs was already imported" warnings
+- **Cause**: Multiple Yjs imports from different CDN versions
+- **Impact**: None - app continues to work normally
+- **Solution**: Warnings can be safely ignored, functionality is unaffected
 
-### Sync Problems
+#### WebRTC Connection Issues
+1. **Signaling servers down**: App automatically falls back to local-only mode
+2. **Corporate networks**: May block WebRTC, but BroadcastChannel still works for same-device sync
+3. **Mobile browsers**: Some have limited WebRTC support, localStorage + BroadcastChannel provides full functionality
 
-1. **Refresh the page**: Reconnects to signaling servers
-2. **Check console**: Look for JavaScript errors
-3. **Network connectivity**: Ensure stable internet connection
-4. **Multiple tabs**: Close other tabs with the same room
+#### Sync Problems
+1. **Same-device sync**: Uses BroadcastChannel (works offline)
+2. **Cross-device sync**: Requires WebRTC (may fail if signaling servers are down)
+3. **Text persistence**: Uses localStorage (always works) + IndexedDB (fallback)
 
-### Performance Issues
+#### Performance Issues
+1. **Large documents**: App handles up to 100K+ characters efficiently
+2. **Multiple tabs**: BroadcastChannel provides instant sync between tabs
+3. **Slow networks**: localStorage ensures no data loss
 
-1. **Large documents**: Consider splitting very long texts
-2. **Many users**: Limit to 10-15 concurrent users
-3. **Slow network**: May cause sync delays
-4. **Old browsers**: Update to latest version
+### Fallback Modes
+
+The app has multiple fallback layers:
+1. **WebRTC** (cross-device sync) → **BroadcastChannel** (same-device sync)
+2. **IndexedDB** (advanced storage) → **localStorage** (universal storage)
+3. **Full P2P mode** → **Local-only mode** (still fully functional)
 
 ## 🚧 Limitations
 

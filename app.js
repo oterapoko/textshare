@@ -6,6 +6,8 @@ import { IndexeddbPersistence } from 'https://cdn.jsdelivr.net/npm/y-indexeddb@9
 let currentProvider = null;
 let currentDoc = null;
 let currentYText = null;
+let yjsErrorCount = 0;
+let yjsDisabled = false;
 
 // Generate cryptographically secure room ID
 function generateRoomId() {
@@ -262,13 +264,18 @@ async function initializeYjs(roomId) {
   // Text synchronization: Yjs -> Textarea
   let updatingFromYjs = false;
   ytext.observe((event, transaction) => {
-    if (updatingFromYjs) return;
+    // Skip if we're currently updating, or if this is our own local update
+    if (updatingFromYjs || updatingFromTextarea || transaction.origin === 'local-update') {
+      return;
+    }
     
     const ytextValue = ytext.toString();
-    console.log('Yjs text changed, new length:', ytextValue.length);
     
+    // Only update if the content is actually different
     if (textarea.value !== ytextValue) {
       updatingFromYjs = true;
+      console.log('Yjs text changed from remote, updating textarea:', ytextValue.length, 'characters');
+      
       const cursorPos = textarea.selectionStart;
       const scrollPos = textarea.scrollTop;
       
@@ -281,8 +288,9 @@ async function initializeYjs(roomId) {
       textarea.scrollTop = scrollPos;
       updateCharCount();
       
-      console.log('Updated textarea from Yjs:', ytextValue.length, 'characters');
-      updatingFromYjs = false;
+      setTimeout(() => {
+        updatingFromYjs = false;
+      }, 10);
     }
   });
   
@@ -296,19 +304,61 @@ async function initializeYjs(roomId) {
     const currentText = ytext.toString();
     const newText = textarea.value;
     
+    // Only sync if there's actually a difference
     if (currentText !== newText) {
       updatingFromTextarea = true;
       console.log('Updating Yjs from textarea:', newText.length, 'characters');
       
-      ydoc.transact(() => {
-        ytext.delete(0, currentText.length);
-        ytext.insert(0, newText);
-      });
+      // Only try Yjs if it's not disabled due to errors
+      if (!yjsDisabled) {
+        try {
+          // Use a safer approach: apply diff instead of delete/insert all
+          ydoc.transact(() => {
+            // Find the differences and apply minimal changes
+            const minLength = Math.min(currentText.length, newText.length);
+            let startDiff = 0;
+            let endDiff = 0;
+            
+            // Find start of difference
+            while (startDiff < minLength && currentText[startDiff] === newText[startDiff]) {
+              startDiff++;
+            }
+            
+            // Find end of difference
+            while (endDiff < minLength - startDiff && 
+                   currentText[currentText.length - 1 - endDiff] === newText[newText.length - 1 - endDiff]) {
+              endDiff++;
+            }
+            
+            // Calculate what to delete and insert
+            const deleteLength = currentText.length - startDiff - endDiff;
+            const insertText = newText.slice(startDiff, newText.length - endDiff);
+            
+            // Apply the minimal changes
+            if (deleteLength > 0) {
+              ytext.delete(startDiff, deleteLength);
+            }
+            if (insertText.length > 0) {
+              ytext.insert(startDiff, insertText);
+            }
+          }, 'local-update');
+          
+        } catch (error) {
+          yjsErrorCount++;
+          console.warn(`Yjs sync error #${yjsErrorCount}:`, error);
+          
+          // If we get too many errors, disable Yjs completely
+          if (yjsErrorCount >= 5) {
+            yjsDisabled = true;
+            console.warn('Too many Yjs errors, disabling Yjs sync. Using localStorage + BroadcastChannel only.');
+            showToast('Switched to local-only mode due to sync issues', 'error');
+          }
+        }
+      }
       
       // Save to localStorage for mobile browser compatibility
       try {
         localStorage.setItem(localStorageKey, newText);
-        console.log('Saved to localStorage');
       } catch (error) {
         console.warn('localStorage save failed:', error);
       }
@@ -322,8 +372,12 @@ async function initializeYjs(roomId) {
         });
       }
       
-      updatingFromTextarea = false;
       updateCharCount();
+      
+      // Reset flag after a short delay
+      setTimeout(() => {
+        updatingFromTextarea = false;
+      }, 50);
     }
   };
   
