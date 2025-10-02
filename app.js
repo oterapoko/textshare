@@ -1,6 +1,6 @@
-import * as Y from 'https://cdn.jsdelivr.net/npm/yjs@latest/+esm';
-import { WebrtcProvider } from 'https://cdn.jsdelivr.net/npm/y-webrtc@latest/+esm';
-import { IndexeddbPersistence } from 'https://cdn.jsdelivr.net/npm/y-indexeddb@latest/+esm';
+import * as Y from 'https://cdn.jsdelivr.net/npm/yjs@13.6.10/+esm';
+import { WebrtcProvider } from 'https://cdn.jsdelivr.net/npm/y-webrtc@10.2.5/+esm';
+import { IndexeddbPersistence } from 'https://cdn.jsdelivr.net/npm/y-indexeddb@9.0.12/+esm';
 
 // Global variables
 let currentProvider = null;
@@ -120,65 +120,143 @@ async function initializeYjs(roomId) {
   }
   updateConnectionStatus('connecting', 0);
   
-  // IndexedDB persistence - CRITICAL: Wait for it to sync first
-  console.log('Setting up IndexedDB persistence...');
-  const indexeddbProvider = new IndexeddbPersistence(`textshare-${roomId}`, ydoc);
+  // Multi-layer persistence: IndexedDB + localStorage fallback
+  console.log('Setting up persistence layers...');
+  let indexeddbProvider = null;
+  let persistenceReady = false;
   
-  // Promise to wait for IndexedDB to be ready
+  // Try IndexedDB first
+  try {
+    indexeddbProvider = new IndexeddbPersistence(`textshare-${roomId}`, ydoc);
+    console.log('IndexedDB provider created');
+  } catch (error) {
+    console.warn('IndexedDB failed, will use localStorage fallback:', error);
+  }
+  
+  // localStorage fallback for mobile browsers
+  const localStorageKey = `textshare-${roomId}`;
+  
+  // Load from localStorage immediately (faster than IndexedDB)
+  const savedTextFromLS = localStorage.getItem(localStorageKey);
+  if (savedTextFromLS) {
+    console.log('Found saved text in localStorage:', savedTextFromLS.length, 'characters');
+    ytext.insert(0, savedTextFromLS);
+    textarea.value = savedTextFromLS;
+    updateCharCount();
+  }
+  
+  // Promise to wait for persistence to be ready
   const indexedDBReady = new Promise((resolve) => {
-    indexeddbProvider.on('synced', () => {
-      console.log('IndexedDB synced successfully');
-      const savedText = ytext.toString();
-      if (savedText) {
-        console.log('Found saved text:', savedText.length, 'characters');
-        if (textarea.value !== savedText) {
-          textarea.value = savedText;
-          updateCharCount();
+    if (indexeddbProvider) {
+      // Set a timeout in case IndexedDB never syncs (common on mobile)
+      const timeout = setTimeout(() => {
+        console.warn('IndexedDB sync timeout, using localStorage only');
+        persistenceReady = true;
+        resolve();
+      }, 3000); // 3 second timeout
+      
+      indexeddbProvider.on('synced', () => {
+        clearTimeout(timeout);
+        console.log('IndexedDB synced successfully');
+        const savedText = ytext.toString();
+        if (savedText && savedText !== savedTextFromLS) {
+          console.log('IndexedDB has newer text:', savedText.length, 'characters');
+          if (textarea.value !== savedText) {
+            textarea.value = savedText;
+            updateCharCount();
+          }
         }
-      } else {
-        console.log('No saved text found in IndexedDB');
-      }
+        persistenceReady = true;
+        resolve();
+      });
+    } else {
+      // No IndexedDB, use localStorage only
+      console.log('Using localStorage-only persistence');
+      persistenceReady = true;
       resolve();
-    });
+    }
   });
   
   // Wait for IndexedDB to be ready before setting up WebRTC
   await indexedDBReady;
   
-  // WebRTC provider for P2P sync
+  // Try WebRTC provider with fallback to local-only mode
   console.log('Setting up WebRTC provider...');
-  const webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
-    signaling: [
-      'wss://signaling.yjs.dev',
-      'wss://y-webrtc-signaling-eu.herokuapp.com',
-      'wss://y-webrtc-signaling-us.herokuapp.com'
-    ],
-    maxConns: 20,
-    filterBcConns: true,
-    peerOpts: {
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+  let webrtcProvider = null;
+  
+  try {
+    webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
+      signaling: [
+        // Use only working signaling servers or none at all
+      ],
+      maxConns: 5, // Reduced for better performance
+      filterBcConns: true,
+      peerOpts: {
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }
+          ]
+        }
       }
-    }
-  });
+    });
+    console.log('WebRTC provider created, but may not connect due to signaling server issues');
+  } catch (error) {
+    console.warn('WebRTC provider failed to initialize:', error);
+    webrtcProvider = null;
+  }
   
   currentProvider = webrtcProvider;
+  
+  // BroadcastChannel fallback for same-device multi-tab sync
+  let broadcastChannel = null;
+  if (typeof BroadcastChannel !== 'undefined') {
+    broadcastChannel = new BroadcastChannel(`textshare-${roomId}`);
+    
+    // Listen for messages from other tabs
+    broadcastChannel.addEventListener('message', (event) => {
+      if (event.data.type === 'text-update' && event.data.text !== ytext.toString()) {
+        console.log('Received text update from another tab via BroadcastChannel');
+        updatingFromYjs = true;
+        const cursorPos = textarea.selectionStart;
+        textarea.value = event.data.text;
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, event.data.text);
+        textarea.setSelectionRange(cursorPos, cursorPos);
+        updateCharCount();
+        updatingFromYjs = false;
+      } else if (event.data.type === 'peer-join') {
+        console.log('Peer joined via BroadcastChannel');
+        // Simulate peer awareness for local tabs
+        peerCount = Math.max(peerCount, 1);
+        if (peerCountElement) {
+          peerCountElement.textContent = peerCount.toString();
+        }
+        updateConnectionStatus('connected', peerCount);
+      }
+    });
+    
+    // Announce presence to other tabs
+    broadcastChannel.postMessage({ type: 'peer-join', userId: 'user-' + Math.random().toString(36).substr(2, 8) });
+    
+    console.log('BroadcastChannel fallback enabled for same-device sync');
+  }
   
   // Peer count tracking
   let peerCount = 0;
   const updatePeerCount = () => {
-    const states = webrtcProvider.awareness.getStates();
-    peerCount = Math.max(0, states.size - 1);
+    if (webrtcProvider && webrtcProvider.awareness) {
+      const states = webrtcProvider.awareness.getStates();
+      peerCount = Math.max(0, states.size - 1);
+    } else {
+      peerCount = 0;
+    }
     
     if (peerCountElement) {
       peerCountElement.textContent = peerCount.toString();
     }
     
-    console.log('Peer count updated:', peerCount, '(total awareness states:', states.size, ')');
-    updateConnectionStatus(peerCount > 0 ? 'connected' : 'connecting', peerCount);
+    console.log('Peer count updated:', peerCount);
+    updateConnectionStatus(peerCount > 0 ? 'connected' : 'disconnected', peerCount);
   };
   
   // Text synchronization: Yjs -> Textarea
@@ -227,6 +305,23 @@ async function initializeYjs(roomId) {
         ytext.insert(0, newText);
       });
       
+      // Save to localStorage for mobile browser compatibility
+      try {
+        localStorage.setItem(localStorageKey, newText);
+        console.log('Saved to localStorage');
+      } catch (error) {
+        console.warn('localStorage save failed:', error);
+      }
+      
+      // Also broadcast via BroadcastChannel for same-device sync
+      if (broadcastChannel) {
+        broadcastChannel.postMessage({ 
+          type: 'text-update', 
+          text: newText,
+          timestamp: Date.now()
+        });
+      }
+      
       updatingFromTextarea = false;
       updateCharCount();
     }
@@ -237,49 +332,63 @@ async function initializeYjs(roomId) {
     inputTimeout = setTimeout(syncTextareaToYjs, 50); // Faster sync
   });
   
-  // WebRTC events
-  webrtcProvider.on('status', (event) => {
-    console.log('WebRTC status changed:', event.status);
-    if (event.status === 'connected') {
-      updateConnectionStatus('connected', peerCount);
-    } else if (event.status === 'connecting') {
-      updateConnectionStatus('connecting', peerCount);
-    } else {
-      updateConnectionStatus('disconnected', peerCount);
-    }
-  });
-  
-  // Awareness events (peer tracking)
-  webrtcProvider.awareness.on('change', (changes) => {
-    console.log('Awareness changed:', {
-      added: changes.added,
-      updated: changes.updated,
-      removed: changes.removed
+  // WebRTC events (only if provider exists)
+  if (webrtcProvider) {
+    // WebRTC events with better error handling
+    webrtcProvider.on('status', (event) => {
+      console.log('WebRTC status changed:', event.status);
+      if (event.status === 'connected') {
+        updateConnectionStatus('connected', peerCount);
+        showToast('Connected to collaboration network!');
+      } else if (event.status === 'connecting') {
+        updateConnectionStatus('connecting', peerCount);
+      } else {
+        updateConnectionStatus('disconnected', peerCount);
+      }
     });
-    updatePeerCount();
-  });
-  
-  // Peer connection events
-  webrtcProvider.on('peers', (event) => {
-    console.log('Peers event:', event);
-    updatePeerCount();
-  });
-  
-  // Document sync events
-  webrtcProvider.on('synced', () => {
-    console.log('WebRTC document synced');
-    updatePeerCount();
-  });
-  
-  // Set user awareness (helps with peer detection)
-  const userId = 'user-' + Math.random().toString(36).substr(2, 8);
-  webrtcProvider.awareness.setLocalStateField('user', {
-    name: userId,
-    color: '#' + Math.floor(Math.random()*16777215).toString(16),
-    timestamp: Date.now()
-  });
-  
-  console.log('Set user awareness:', userId);
+    
+    // Handle WebRTC connection errors
+    webrtcProvider.on('connection-error', (error) => {
+      console.error('WebRTC connection error:', error);
+      showToast('Connection issues - using local mode...', 'error');
+    });
+    
+    // Awareness events (peer tracking)
+    webrtcProvider.awareness.on('change', (changes) => {
+      console.log('Awareness changed:', {
+        added: changes.added,
+        updated: changes.updated,
+        removed: changes.removed
+      });
+      updatePeerCount();
+    });
+    
+    // Peer connection events
+    webrtcProvider.on('peers', (event) => {
+      console.log('Peers event:', event);
+      updatePeerCount();
+    });
+    
+    // Document sync events
+    webrtcProvider.on('synced', () => {
+      console.log('WebRTC document synced');
+      updatePeerCount();
+    });
+    
+    // Set user awareness (helps with peer detection)
+    const userId = 'user-' + Math.random().toString(36).substr(2, 8);
+    webrtcProvider.awareness.setLocalStateField('user', {
+      name: userId,
+      color: '#' + Math.floor(Math.random()*16777215).toString(16),
+      timestamp: Date.now()
+    });
+    console.log('Set user awareness:', userId);
+  } else {
+    // No WebRTC - show local-only mode immediately
+    console.log('WebRTC not available - running in local-only mode');
+    updateConnectionStatus('disconnected', 0);
+    showToast('Running in local-only mode - text will be saved locally', 'error');
+  }
   
   // Initial UI setup
   setTimeout(() => {
