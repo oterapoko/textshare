@@ -89,12 +89,14 @@ function updateConnectionStatus(status, peerCount = 0) {
 }
 
 // Initialize Yjs for a room
-function initializeYjs(roomId) {
+async function initializeYjs(roomId) {
   console.log('Initializing Yjs for room:', roomId);
   
   // Clean up previous connections
   if (currentProvider) {
+    console.log('Destroying previous provider');
     currentProvider.destroy();
+    currentProvider = null;
   }
   
   const ydoc = new Y.Doc();
@@ -105,32 +107,46 @@ function initializeYjs(roomId) {
   currentYText = ytext;
   
   const textarea = document.getElementById('editor');
+  const peerCountElement = document.getElementById('peer-count');
   
   if (!textarea) {
     console.error('Editor textarea not found');
     return;
   }
   
-  // Initialize peer count display
-  const peerCountElement = document.getElementById('peer-count');
+  // Initialize UI
   if (peerCountElement) {
     peerCountElement.textContent = '0';
   }
+  updateConnectionStatus('connecting', 0);
   
-  // IndexedDB persistence - with better error handling
+  // IndexedDB persistence - CRITICAL: Wait for it to sync first
+  console.log('Setting up IndexedDB persistence...');
   const indexeddbProvider = new IndexeddbPersistence(`textshare-${roomId}`, ydoc);
   
-  indexeddbProvider.on('synced', () => {
-    console.log('Content loaded from IndexedDB');
-    const savedText = ytext.toString();
-    if (savedText && textarea.value !== savedText) {
-      textarea.value = savedText;
-      updateCharCount();
-      console.log('Restored text from IndexedDB:', savedText.length, 'characters');
-    }
+  // Promise to wait for IndexedDB to be ready
+  const indexedDBReady = new Promise((resolve) => {
+    indexeddbProvider.on('synced', () => {
+      console.log('IndexedDB synced successfully');
+      const savedText = ytext.toString();
+      if (savedText) {
+        console.log('Found saved text:', savedText.length, 'characters');
+        if (textarea.value !== savedText) {
+          textarea.value = savedText;
+          updateCharCount();
+        }
+      } else {
+        console.log('No saved text found in IndexedDB');
+      }
+      resolve();
+    });
   });
   
-  // WebRTC provider for P2P sync - with better configuration
+  // Wait for IndexedDB to be ready before setting up WebRTC
+  await indexedDBReady;
+  
+  // WebRTC provider for P2P sync
+  console.log('Setting up WebRTC provider...');
   const webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
     signaling: [
       'wss://signaling.yjs.dev',
@@ -138,119 +154,144 @@ function initializeYjs(roomId) {
       'wss://y-webrtc-signaling-us.herokuapp.com'
     ],
     maxConns: 20,
-    filterBcConns: true
+    filterBcConns: true,
+    peerOpts: {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
+    }
   });
   
   currentProvider = webrtcProvider;
   
-  // Better peer count tracking
+  // Peer count tracking
   let peerCount = 0;
-  
-  // Update peer count with proper calculation
   const updatePeerCount = () => {
     const states = webrtcProvider.awareness.getStates();
-    peerCount = Math.max(0, states.size - 1); // Ensure never negative
+    peerCount = Math.max(0, states.size - 1);
     
     if (peerCountElement) {
       peerCountElement.textContent = peerCount.toString();
     }
     
-    console.log('Peer count updated:', peerCount, 'total states:', states.size);
+    console.log('Peer count updated:', peerCount, '(total awareness states:', states.size, ')');
     updateConnectionStatus(peerCount > 0 ? 'connected' : 'connecting', peerCount);
   };
   
-  // Sync Yjs to textarea with better handling
-  ytext.observe((event) => {
+  // Text synchronization: Yjs -> Textarea
+  let updatingFromYjs = false;
+  ytext.observe((event, transaction) => {
+    if (updatingFromYjs) return;
+    
     const ytextValue = ytext.toString();
+    console.log('Yjs text changed, new length:', ytextValue.length);
+    
     if (textarea.value !== ytextValue) {
+      updatingFromYjs = true;
       const cursorPos = textarea.selectionStart;
       const scrollPos = textarea.scrollTop;
+      
       textarea.value = ytextValue;
       
-      // Restore cursor position if possible
+      // Restore cursor position
       if (cursorPos <= ytextValue.length) {
         textarea.setSelectionRange(cursorPos, cursorPos);
       }
       textarea.scrollTop = scrollPos;
       updateCharCount();
       
-      console.log('Text updated from Yjs:', ytextValue.length, 'characters');
+      console.log('Updated textarea from Yjs:', ytextValue.length, 'characters');
+      updatingFromYjs = false;
     }
   });
   
-  // Sync textarea to Yjs with debouncing
-  let isLocalChange = false;
+  // Text synchronization: Textarea -> Yjs
+  let updatingFromTextarea = false;
   let inputTimeout = null;
   
-  textarea.addEventListener('input', () => {
-    if (isLocalChange) return;
+  const syncTextareaToYjs = () => {
+    if (updatingFromTextarea || updatingFromYjs) return;
     
-    // Clear previous timeout
-    if (inputTimeout) {
-      clearTimeout(inputTimeout);
-    }
+    const currentText = ytext.toString();
+    const newText = textarea.value;
     
-    // Debounce input to avoid too many updates
-    inputTimeout = setTimeout(() => {
-      const currentText = ytext.toString();
-      const newText = textarea.value;
+    if (currentText !== newText) {
+      updatingFromTextarea = true;
+      console.log('Updating Yjs from textarea:', newText.length, 'characters');
       
-      if (currentText !== newText) {
-        isLocalChange = true;
-        ydoc.transact(() => {
-          ytext.delete(0, currentText.length);
-          ytext.insert(0, newText);
-        });
-        isLocalChange = false;
-        updateCharCount();
-        console.log('Text updated to Yjs:', newText.length, 'characters');
-      }
-    }, 100); // 100ms debounce
+      ydoc.transact(() => {
+        ytext.delete(0, currentText.length);
+        ytext.insert(0, newText);
+      });
+      
+      updatingFromTextarea = false;
+      updateCharCount();
+    }
+  };
+  
+  textarea.addEventListener('input', () => {
+    clearTimeout(inputTimeout);
+    inputTimeout = setTimeout(syncTextareaToYjs, 50); // Faster sync
   });
   
-  // WebRTC connection events
-  webrtcProvider.on('status', event => {
-    console.log('WebRTC status:', event.status);
-    updateConnectionStatus(event.status === 'connected' ? 'connected' : 'connecting', peerCount);
+  // WebRTC events
+  webrtcProvider.on('status', (event) => {
+    console.log('WebRTC status changed:', event.status);
+    if (event.status === 'connected') {
+      updateConnectionStatus('connected', peerCount);
+    } else if (event.status === 'connecting') {
+      updateConnectionStatus('connecting', peerCount);
+    } else {
+      updateConnectionStatus('disconnected', peerCount);
+    }
   });
   
-  // Awareness events for peer tracking
+  // Awareness events (peer tracking)
   webrtcProvider.awareness.on('change', (changes) => {
-    console.log('Awareness changed:', changes);
+    console.log('Awareness changed:', {
+      added: changes.added,
+      updated: changes.updated,
+      removed: changes.removed
+    });
     updatePeerCount();
   });
   
-  // WebRTC peer events
+  // Peer connection events
   webrtcProvider.on('peers', (event) => {
     console.log('Peers event:', event);
     updatePeerCount();
   });
   
-  // Connection established
+  // Document sync events
   webrtcProvider.on('synced', () => {
-    console.log('WebRTC synced');
+    console.log('WebRTC document synced');
     updatePeerCount();
   });
   
-  // Initial setup
-  updateConnectionStatus('connecting', 0);
+  // Set user awareness (helps with peer detection)
+  const userId = 'user-' + Math.random().toString(36).substr(2, 8);
+  webrtcProvider.awareness.setLocalStateField('user', {
+    name: userId,
+    color: '#' + Math.floor(Math.random()*16777215).toString(16),
+    timestamp: Date.now()
+  });
   
-  // Focus textarea and update char count after a delay
+  console.log('Set user awareness:', userId);
+  
+  // Initial UI setup
   setTimeout(() => {
     textarea.focus();
     updateCharCount();
     updatePeerCount();
-  }, 200);
-  
-  // Set user awareness info
-  webrtcProvider.awareness.setLocalStateField('user', {
-    name: 'User-' + Math.random().toString(36).substr(2, 5),
-    color: '#' + Math.floor(Math.random()*16777215).toString(16)
-  });
+    console.log('Yjs initialization complete for room:', roomId);
+  }, 100);
 }
 
 // Router function
-function handleRoute() {
+async function handleRoute() {
   const hash = window.location.hash;
   
   if (hash.startsWith('#room-')) {
@@ -266,11 +307,18 @@ function handleRoute() {
     document.getElementById('landing').classList.add('hidden');
     document.getElementById('editor-container').classList.remove('hidden');
     
-    // Initialize Yjs with slight delay to ensure DOM is ready
-    setTimeout(() => initializeYjs(roomId), 50);
+    // Initialize Yjs with proper async handling
+    try {
+      await initializeYjs(roomId);
+    } catch (error) {
+      console.error('Failed to initialize Yjs:', error);
+      // Show error to user
+      showToast('Failed to initialize room. Please try again.', 'error');
+    }
   } else {
     // Clean up connections when leaving editor
     if (currentProvider) {
+      console.log('Cleaning up provider on route change');
       currentProvider.destroy();
       currentProvider = null;
     }
