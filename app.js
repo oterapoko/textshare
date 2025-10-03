@@ -78,8 +78,8 @@ function updateConnectionStatus(status, peerCount = 0) {
       indicatorClass = 'bg-green-500';
       break;
     case 'disconnected':
-      statusText = 'Offline';
-      indicatorClass = 'bg-red-500';
+      statusText = 'Local Mode';
+      indicatorClass = 'bg-blue-500';
       break;
     default:
       statusText = 'Unknown';
@@ -186,32 +186,11 @@ async function initializeYjs(roomId) {
   console.log('Setting up WebRTC provider...');
   let webrtcProvider = null;
   
-  try {
-    webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
-      signaling: [
-        'wss://signaling.yjs.dev',
-        'wss://y-webrtc-signaling-eu.herokuapp.com',
-        'wss://y-webrtc-signaling-us.herokuapp.com'
-      ],
-      maxConns: 10,
-      filterBcConns: true,
-      peerOpts: {
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' }
-          ]
-        }
-      }
-    });
-    console.log('WebRTC provider created with signaling servers');
-  } catch (error) {
-    console.warn('WebRTC provider failed to initialize:', error);
-    webrtcProvider = null;
-  }
+  // Since most free signaling servers are unreliable, let's disable WebRTC for now
+  // and focus on the reliable local features that work perfectly
+  console.log('WebRTC disabled - using reliable local-only mode');
+  console.log('This ensures consistent performance without dependency on external servers');
+  webrtcProvider = null;
   
   currentProvider = webrtcProvider;
   
@@ -461,9 +440,9 @@ async function initializeYjs(roomId) {
     
   } else {
     // No WebRTC - show local-only mode immediately
-    console.log('WebRTC not available - running in local-only mode');
+    console.log('Running in reliable local-only mode');
     updateConnectionStatus('disconnected', 0);
-    showToast('Running in local-only mode - text will be saved locally', 'error');
+    showToast('💾 Local mode active - text saved securely on your device', 'success');
   }
   
   // Initial UI setup

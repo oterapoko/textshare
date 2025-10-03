@@ -177,10 +177,10 @@ open test/index.html
 - **Impact**: None - app continues to work normally
 - **Solution**: Warnings can be safely ignored, functionality is unaffected
 
-#### WebRTC Connection Issues
-1. **Signaling servers down**: App automatically falls back to local-only mode
-2. **Corporate networks**: May block WebRTC, but BroadcastChannel still works for same-device sync
-3. **Mobile browsers**: Some have limited WebRTC support, localStorage + BroadcastChannel provides full functionality
+#### Internet Sync Limitations
+1. **Free signaling servers unreliable**: Most free WebRTC signaling servers frequently go offline
+2. **Local mode is primary**: App focuses on reliable local features that work consistently
+3. **Same-device sync works perfectly**: BroadcastChannel provides instant sync between tabs on the same device
 
 #### Sync Problems
 1. **Same-device sync**: Uses BroadcastChannel (works offline)
@@ -192,20 +192,21 @@ open test/index.html
 2. **Multiple tabs**: BroadcastChannel provides instant sync between tabs
 3. **Slow networks**: localStorage ensures no data loss
 
-### Fallback Modes
+### Reliable Local Features
 
-The app has multiple fallback layers:
-1. **WebRTC** (cross-device sync) → **BroadcastChannel** (same-device sync)
-2. **IndexedDB** (advanced storage) → **localStorage** (universal storage)
-3. **Full P2P mode** → **Local-only mode** (still fully functional)
+The app prioritizes reliable functionality:
+1. **localStorage**: Universal text persistence that works on all browsers
+2. **BroadcastChannel**: Instant sync between tabs on the same device
+3. **IndexedDB**: Enhanced storage for better performance (with fallback)
+4. **Local-first approach**: No dependency on external servers for core functionality
 
-## 🚧 Limitations
+## 🚧 Current Limitations
 
-- **No Server = No Guarantee**: If all peers disconnect, unsaved changes may be lost
-- **WebRTC Dependency**: Requires modern browser with WebRTC support
-- **Network Required**: At least one peer must be online for sync
-- **Large Documents**: Performance degrades with 100K+ characters
-- **No User Management**: Can't track document ownership or access control
+- **Cross-device sync disabled**: Free signaling servers are unreliable, so internet collaboration is currently disabled
+- **Same-device only**: Multi-tab sync works perfectly on the same device
+- **Large documents**: Performance may degrade with 100K+ characters
+- **No user management**: Can't track document ownership or access control
+- **Local storage limits**: Browser storage quotas may limit very large documents
 
 ## 🔮 Future Enhancements
 
