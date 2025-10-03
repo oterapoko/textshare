@@ -189,19 +189,25 @@ async function initializeYjs(roomId) {
   try {
     webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
       signaling: [
-        // Use only working signaling servers or none at all
+        'wss://signaling.yjs.dev',
+        'wss://y-webrtc-signaling-eu.herokuapp.com',
+        'wss://y-webrtc-signaling-us.herokuapp.com'
       ],
-      maxConns: 5, // Reduced for better performance
+      maxConns: 10,
       filterBcConns: true,
       peerOpts: {
         config: {
           iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' }
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' }
           ]
         }
       }
     });
-    console.log('WebRTC provider created, but may not connect due to signaling server issues');
+    console.log('WebRTC provider created with signaling servers');
   } catch (error) {
     console.warn('WebRTC provider failed to initialize:', error);
     webrtcProvider = null;
@@ -393,11 +399,13 @@ async function initializeYjs(roomId) {
       console.log('WebRTC status changed:', event.status);
       if (event.status === 'connected') {
         updateConnectionStatus('connected', peerCount);
-        showToast('Connected to collaboration network!');
+        showToast('🌐 Connected! Ready for cross-device collaboration');
       } else if (event.status === 'connecting') {
         updateConnectionStatus('connecting', peerCount);
+        console.log('WebRTC connecting to signaling servers...');
       } else {
         updateConnectionStatus('disconnected', peerCount);
+        console.log('WebRTC disconnected, using local-only mode');
       }
     });
     
@@ -437,6 +445,20 @@ async function initializeYjs(roomId) {
       timestamp: Date.now()
     });
     console.log('Set user awareness:', userId);
+    // Set a timeout to detect if signaling servers are not responding
+    let signalingTimeout = setTimeout(() => {
+      console.warn('Signaling servers not responding after 10 seconds');
+      updateConnectionStatus('disconnected', 0);
+      showToast('⚠️ Internet sync unavailable - working in local mode', 'error');
+    }, 10000);
+    
+    // Clear timeout if WebRTC connects successfully
+    webrtcProvider.on('status', (event) => {
+      if (event.status === 'connected') {
+        clearTimeout(signalingTimeout);
+      }
+    });
+    
   } else {
     // No WebRTC - show local-only mode immediately
     console.log('WebRTC not available - running in local-only mode');
