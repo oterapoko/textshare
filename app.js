@@ -78,8 +78,8 @@ function updateConnectionStatus(status, peerCount = 0) {
       indicatorClass = 'bg-green-500';
       break;
     case 'disconnected':
-      statusText = 'Local Mode';
-      indicatorClass = 'bg-blue-500';
+      statusText = 'Offline';
+      indicatorClass = 'bg-red-500';
       break;
     default:
       statusText = 'Unknown';
@@ -186,11 +186,26 @@ async function initializeYjs(roomId) {
   console.log('Setting up WebRTC provider...');
   let webrtcProvider = null;
   
-  // Since most free signaling servers are unreliable, let's disable WebRTC for now
-  // and focus on the reliable local features that work perfectly
-  console.log('WebRTC disabled - using reliable local-only mode');
-  console.log('This ensures consistent performance without dependency on external servers');
-  webrtcProvider = null;
+  try {
+    webrtcProvider = new WebrtcProvider(`textshare-${roomId}`, ydoc, {
+      signaling: [
+        // Use only working signaling servers or none at all
+      ],
+      maxConns: 5, // Reduced for better performance
+      filterBcConns: true,
+      peerOpts: {
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }
+          ]
+        }
+      }
+    });
+    console.log('WebRTC provider created, but may not connect due to signaling server issues');
+  } catch (error) {
+    console.warn('WebRTC provider failed to initialize:', error);
+    webrtcProvider = null;
+  }
   
   currentProvider = webrtcProvider;
   
@@ -378,13 +393,11 @@ async function initializeYjs(roomId) {
       console.log('WebRTC status changed:', event.status);
       if (event.status === 'connected') {
         updateConnectionStatus('connected', peerCount);
-        showToast('🌐 Connected! Ready for cross-device collaboration');
+        showToast('Connected to collaboration network!');
       } else if (event.status === 'connecting') {
         updateConnectionStatus('connecting', peerCount);
-        console.log('WebRTC connecting to signaling servers...');
       } else {
         updateConnectionStatus('disconnected', peerCount);
-        console.log('WebRTC disconnected, using local-only mode');
       }
     });
     
@@ -424,25 +437,11 @@ async function initializeYjs(roomId) {
       timestamp: Date.now()
     });
     console.log('Set user awareness:', userId);
-    // Set a timeout to detect if signaling servers are not responding
-    let signalingTimeout = setTimeout(() => {
-      console.warn('Signaling servers not responding after 10 seconds');
-      updateConnectionStatus('disconnected', 0);
-      showToast('⚠️ Internet sync unavailable - working in local mode', 'error');
-    }, 10000);
-    
-    // Clear timeout if WebRTC connects successfully
-    webrtcProvider.on('status', (event) => {
-      if (event.status === 'connected') {
-        clearTimeout(signalingTimeout);
-      }
-    });
-    
   } else {
     // No WebRTC - show local-only mode immediately
-    console.log('Running in reliable local-only mode');
+    console.log('WebRTC not available - running in local-only mode');
     updateConnectionStatus('disconnected', 0);
-    showToast('💾 Local mode active - text saved securely on your device', 'success');
+    showToast('Running in local-only mode - text will be saved locally', 'error');
   }
   
   // Initial UI setup
